@@ -65,10 +65,10 @@ docker compose build
 ### 4. One-time YouTube authorization
 
 ```bash
-docker compose run --rm worker python scripts/youtube_auth.py
+docker compose run --rm -p 8765:8765 worker python scripts/youtube_auth.py
 ```
 
-Follow the URL printed by Google. The resulting refresh token is stored under `secrets/` and future uploads can run unattended.
+Open the Google authorization URL printed by the command in a browser. After approval, Google redirects to `localhost:8765` and the token is saved under `secrets/`. Future uploads can then run unattended.
 
 ### 5. Start
 
