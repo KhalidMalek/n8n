@@ -14,7 +14,12 @@ if not client_file.exists():
     raise SystemExit(f"Missing OAuth client file: {client_file}")
 
 flow = InstalledAppFlow.from_client_secrets_file(str(client_file), SCOPES)
-creds = flow.run_local_server(port=0, open_browser=False)
+creds = flow.run_local_server(
+    host="localhost",
+    bind_addr="0.0.0.0",
+    port=8765,
+    open_browser=False,
+)
 token_file.parent.mkdir(parents=True, exist_ok=True)
 token_file.write_text(creds.to_json(), encoding="utf-8")
 print(f"Saved YouTube OAuth token to {token_file}")
