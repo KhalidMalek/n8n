@@ -21,6 +21,13 @@ from worker.youtube_upload import YouTubeUploader
 load_dotenv()
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class Settings:
     gemini_api_key: str
@@ -28,6 +35,7 @@ class Settings:
     niche: str
     language: str
     data_dir: Path
+    upload_enabled: bool
     privacy_status: str
     category_id: str
     rss_feeds: list[str]
@@ -42,7 +50,8 @@ class Settings:
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash"),
             niche=os.getenv("CHANNEL_NICHE", "Animated science and future technology what-if simulations"),
             language=os.getenv("VIDEO_LANGUAGE", "en"),
-            data_dir=Path(os.getenv("DATA_DIR", "/app/data")),
+            data_dir=Path(os.getenv("DATA_DIR", "data")),
+            upload_enabled=_env_bool("UPLOAD_ENABLED", False),
             privacy_status=os.getenv("YOUTUBE_PRIVACY_STATUS", "private"),
             category_id=os.getenv("YOUTUBE_CATEGORY_ID", "28"),
             rss_feeds=[x.strip() for x in os.getenv("RSS_FEEDS", "").split(",") if x.strip()],
@@ -217,22 +226,30 @@ Return JSON exactly:
         render = self.renderer.render_episode(job_id, episode, metadata)
         self.renderer.quality_check(render["video_path"])
 
-        uploader = YouTubeUploader(
-            privacy_status=self.settings.privacy_status,
-            category_id=self.settings.category_id,
-        )
-        video_id = uploader.upload(
-            video_path=render["video_path"],
-            thumbnail_path=render["thumbnail_path"],
-            title=metadata["title"],
-            description=metadata["description"],
-            tags=metadata.get("tags", []),
-        )
-        self._finish_record(job_id, metadata["title"], "uploaded", video_id)
+        video_id: str | None = None
+        status = "rendered"
+        if self.settings.upload_enabled:
+            uploader = YouTubeUploader(
+                privacy_status=self.settings.privacy_status,
+                category_id=self.settings.category_id,
+            )
+            video_id = uploader.upload(
+                video_path=render["video_path"],
+                thumbnail_path=render["thumbnail_path"],
+                title=metadata["title"],
+                description=metadata["description"],
+                tags=metadata.get("tags", []),
+            )
+            status = "uploaded"
+
+        self._finish_record(job_id, metadata["title"], status, video_id)
         return {
             "topic": topic,
             "title": metadata["title"],
+            "status": status,
+            "upload_enabled": self.settings.upload_enabled,
             "youtube_video_id": video_id,
-            "privacy_status": self.settings.privacy_status,
+            "privacy_status": self.settings.privacy_status if self.settings.upload_enabled else None,
             "video_path": str(render["video_path"]),
+            "thumbnail_path": str(render["thumbnail_path"]),
         }
