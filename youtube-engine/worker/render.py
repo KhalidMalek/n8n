@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import math
+import os
 import subprocess
+import wave
 from pathlib import Path
 from textwrap import wrap
 from typing import Any
 
-import numpy as np
-import soundfile as sf
-from kokoro import KPipeline
+from piper import PiperVoice
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -20,21 +20,29 @@ class VideoRenderer:
         self.data_dir = data_dir
         self.font_regular = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         self.font_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        self.tts = KPipeline(lang_code="a")
+        model_path = Path(os.getenv("PIPER_MODEL", "voices/en_US-ljspeech-medium.onnx"))
+        if not model_path.is_absolute():
+            model_path = Path.cwd() / model_path
+        if not model_path.exists():
+            raise RuntimeError(
+                f"Piper voice model is missing: {model_path}. "
+                "Run: python -m piper.download_voices --data-dir voices en_US-ljspeech-medium"
+            )
+        self.tts = PiperVoice.load(str(model_path))
 
     @staticmethod
     def _safe_name(value: str) -> str:
         return "".join(c if c.isalnum() or c in "-_" else "_" for c in value)[:80]
 
     def _tts_to_file(self, text: str, path: Path) -> float:
-        chunks: list[np.ndarray] = []
-        for _, _, audio in self.tts(text, voice="af_heart", speed=1.02):
-            chunks.append(np.asarray(audio, dtype=np.float32))
-        if not chunks:
-            raise RuntimeError("Kokoro returned no audio")
-        audio = np.concatenate(chunks)
-        sf.write(path, audio, 24000)
-        return len(audio) / 24000.0
+        with wave.open(str(path), "wb") as wav_file:
+            self.tts.synthesize_wav(text, wav_file)
+        with wave.open(str(path), "rb") as wav_file:
+            frame_rate = wav_file.getframerate()
+            frames = wav_file.getnframes()
+        if frame_rate <= 0 or frames <= 0:
+            raise RuntimeError("Piper returned empty audio")
+        return frames / frame_rate
 
     def _scene_image(self, heading: str, points: list[str], index: int, total: int, path: Path) -> None:
         img = Image.new("RGB", (self.WIDTH, self.HEIGHT), (8, 12, 24))
