@@ -1,0 +1,21 @@
+[Unit]
+Description=AutoTube autonomous YouTube production job
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/autotube-repo/youtube-engine
+EnvironmentFile=/opt/autotube-repo/youtube-engine/.env
+ExecStart=/opt/autotube-repo/youtube-engine/.venv/bin/python /opt/autotube-repo/youtube-engine/scripts/run_once.py
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryHigh=600M
+MemoryMax=800M
+TimeoutStartSec=3h
+
+[Install]
+WantedBy=multi-user.target
