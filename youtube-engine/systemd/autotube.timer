@@ -1,8 +1,14 @@
 [Unit]
-Description=Run AutoTube Monday Wednesday Saturday at 02:15 IST
+Description=Run AutoTube at data-backed long-form YouTube windows (IST)
 
 [Timer]
-OnCalendar=Mon,Wed,Sat *-*-* 02:15:00
+# Initial schedule targets high-value US/English viewers using 2026 long-form YouTube benchmarks.
+# Sunday 18:30 IST ~= 09:00 ET (video should finish near the strong 10:00 ET window)
+# Tuesday 17:30 IST ~= 08:00 ET (video should finish near the strong 09:00 ET window)
+# Friday 20:30 IST ~= 11:00 ET (video should finish near the strong 12:00 ET window)
+OnCalendar=Sun *-*-* 18:30:00
+OnCalendar=Tue *-*-* 17:30:00
+OnCalendar=Fri *-*-* 20:30:00
 Persistent=false
 Unit=autotube.service
 
