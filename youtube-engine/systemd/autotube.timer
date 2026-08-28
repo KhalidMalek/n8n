@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AutoTube Monday Wednesday Saturday at 02:15 IST
+
+[Timer]
+OnCalendar=Mon,Wed,Sat *-*-* 02:15:00
+Persistent=false
+Unit=autotube.service
+
+[Install]
+WantedBy=timers.target
