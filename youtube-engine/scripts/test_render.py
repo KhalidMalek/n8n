@@ -26,27 +26,30 @@ def main() -> None:
             {
                 "heading": "What If Earth Had Rings?",
                 "narration": "Imagine looking up tonight and seeing enormous rings stretching across the sky. This is a short AutoTube rendering test.",
-                "points": ["Original procedural visuals", "Local Piper narration"],
+                "points": ["A planet visual built locally", "No paid image generator"],
+                "visual_type": "planet",
             },
             {
-                "heading": "A Different Sky",
+                "heading": "The Sky Changes With Latitude",
                 "narration": "The rings would look dramatically different depending on your latitude, creating a completely new view of the night sky.",
-                "points": ["Animated scene movement", "1080p FFmpeg output"],
+                "points": ["Equator: rings cross overhead", "Higher latitudes: lower on the horizon", "Every region sees a different geometry"],
+                "visual_type": "timeline",
             },
             {
-                "heading": "Pipeline Check",
-                "narration": "If you can hear this clearly and the video looks smooth, our voice and rendering pipeline are working correctly.",
-                "points": ["Voice: passed", "Video: passed"],
+                "heading": "A New Satellite Problem",
+                "narration": "Satellites and spacecraft would also face a much more complicated orbital environment, changing how engineers plan missions.",
+                "points": ["More orbital hazards", "Different safe paths", "Engineering tradeoffs"],
+                "visual_type": "network",
             },
         ]
     }
     metadata = {
-        "title": "AutoTube Render Test — What If Earth Had Rings?",
+        "title": "What If Earth Had Rings?",
         "thumbnail_text": "EARTH WITH RINGS?",
     }
 
     job_id = f"render-test-{uuid.uuid4().hex[:8]}"
-    print("[2/4] Rendering 3 short scenes on CPU...", flush=True)
+    print("[2/4] Rendering 3 varied scenes on CPU...", flush=True)
     started = time.time()
     result = renderer.render_episode(job_id, episode, metadata)
     elapsed = time.time() - started
