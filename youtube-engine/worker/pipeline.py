@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +14,6 @@ from urllib.parse import quote_plus
 import feedparser
 from dotenv import load_dotenv
 from google import genai
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from worker.render import VideoRenderer
 from worker.youtube_upload import YouTubeUploader
@@ -32,6 +32,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 class Settings:
     gemini_api_key: str
     gemini_model: str
+    gemini_fallback_models: list[str]
     niche: str
     language: str
     data_dir: Path
@@ -47,7 +48,15 @@ class Settings:
             raise RuntimeError("GEMINI_API_KEY is missing. Copy .env.example to .env and add a free Gemini API key.")
         return cls(
             gemini_api_key=key,
-            gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash").strip(),
+            gemini_fallback_models=[
+                x.strip()
+                for x in os.getenv(
+                    "GEMINI_FALLBACK_MODELS",
+                    "gemini-3.5-flash,gemini-3.5-flash-lite",
+                ).split(",")
+                if x.strip()
+            ],
             niche=os.getenv("CHANNEL_NICHE", "Animated science and future technology what-if simulations"),
             language=os.getenv("VIDEO_LANGUAGE", "en"),
             data_dir=Path(os.getenv("DATA_DIR", "data")),
@@ -83,14 +92,66 @@ class Pipeline:
                 """
             )
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
-    def _gemini_json(self, prompt: str) -> Any:
-        response = self.client.models.generate_content(
-            model=self.settings.gemini_model,
-            contents=prompt,
-            config={"response_mime_type": "application/json"},
+    @staticmethod
+    def _is_transient_gemini_error(exc: Exception) -> bool:
+        status_code = getattr(exc, "status_code", None)
+        if status_code in {429, 500, 502, 503, 504}:
+            return True
+        message = str(exc).lower()
+        return any(
+            marker in message
+            for marker in (
+                "503",
+                "unavailable",
+                "high demand",
+                "resource exhausted",
+                "rate limit",
+                "429",
+                "deadline exceeded",
+                "temporarily",
+            )
         )
-        return json.loads((response.text or "").strip())
+
+    def _gemini_json(self, prompt: str) -> Any:
+        models: list[str] = []
+        for model in [self.settings.gemini_model, *self.settings.gemini_fallback_models]:
+            if model and model not in models:
+                models.append(model)
+
+        last_error: Exception | None = None
+        for model_index, model in enumerate(models):
+            for attempt in range(1, 3):
+                try:
+                    response = self.client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config={"response_mime_type": "application/json"},
+                    )
+                    payload = json.loads((response.text or "").strip())
+                    if model != self.settings.gemini_model:
+                        print(f"Gemini fallback succeeded with {model}.", flush=True)
+                    return payload
+                except Exception as exc:  # noqa: BLE001
+                    last_error = exc
+                    if not self._is_transient_gemini_error(exc):
+                        raise
+                    if attempt < 2:
+                        delay = 8 * attempt
+                        print(
+                            f"Gemini {model} temporarily unavailable; retrying in {delay}s...",
+                            flush=True,
+                        )
+                        time.sleep(delay)
+                    elif model_index < len(models) - 1:
+                        print(
+                            f"Gemini {model} still unavailable; switching to {models[model_index + 1]}...",
+                            flush=True,
+                        )
+
+        raise RuntimeError(
+            "All configured free-tier Gemini models were temporarily unavailable. "
+            f"Tried: {', '.join(models)}. Last error: {last_error}"
+        ) from last_error
 
     def _recent_topics(self, limit: int = 50) -> list[str]:
         with sqlite3.connect(self.db_path) as con:
