@@ -3,7 +3,7 @@ services:
     image: n8nio/n8n:latest
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     environment:
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Kolkata}
       - TZ=${GENERIC_TIMEZONE:-Asia/Kolkata}
@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
       - ./secrets:/app/secrets
