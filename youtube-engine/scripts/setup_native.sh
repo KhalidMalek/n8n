@@ -27,7 +27,7 @@ UV_BIN="$(command -v uv)"
 echo "Using uv: $UV_BIN"
 
 uv python install 3.11
-uv venv --python 3.11 .venv
+uv venv --clear --python 3.11 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 
 mkdir -p data secrets voices
