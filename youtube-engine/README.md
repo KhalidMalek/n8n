@@ -1,48 +1,62 @@
-# AutoTube V3 — Autonomous Character-Simulation Channel
+# AutoTube Pilot — Evidence-Led Technology Documentary
 
-AutoTube V3 is a CPU-only YouTube production system for original robot challenges,
-science simulations and future-tech entertainment. It is designed for the small Oracle
-Cloud VM used by this project and keeps paid video-generation APIs out of the pipeline.
+> **Creative reset:** the V3 robot simulation passed its technical checks but failed
+> the human watchability review. Do not upload it and do not use the recurring-robot
+> template for production. The current target format is an evidence-led,
+> build-in-public mini-documentary with real project footage and human approval.
 
-The channel has a reusable original cast:
+The current experiment is designed for the existing two-core, ~1 GB Oracle Cloud VM.
+It treats AI as a production assistant, while the topic, evidence, editorial decision
+and final approval remain human-controlled.
 
-- **Nova** — blue team leader
-- **Mira** — purple analyst
-- **Bolt** — orange risk-taker
-- **Pix** — green problem-solver and underdog
+## What the pilot does
 
-The characters and situations are original. The pipeline does not depend on celebrity
-likenesses, copied cartoon characters or mass-produced stock-video templates.
-
-## What V3 automates
-
-1. A timer starts production at the configured publishing windows.
-2. Free RSS signals and recent topics inform the idea engine.
-3. Gemini's free tier scores original challenge concepts.
-4. Gemini writes a sourced story, narration and shot-level storyboard.
-5. Piper generates narration locally.
-6. Pillow and FFmpeg render reusable characters plus frame-by-frame bridge, gravity,
-   maze and Mars simulations.
-7. The renderer adds captions, shot labels, motion and a challenge-style thumbnail.
-8. A quality gate rejects missing, corrupt or unusually short output.
-9. The YouTube Data API can upload the video and thumbnail.
-10. SQLite records completed and failed topics to reduce close repeats.
+1. Finds the real rejected V3 render already stored on the server.
+2. Uses a fixed, reviewed build-log script based on the real experiment.
+3. Generates a directed documentary narration with Gemini TTS.
+4. Combines the real footage with original metrics, charts and motion graphics.
+5. Burns readable captions and creates a new evidence-led thumbnail.
+6. Checks the private render's duration and media integrity.
+7. Stops. It does not call the YouTube uploader or production timer.
 
 Uploads remain disabled by default. Keep all initial YouTube uploads `private` until
 several generated videos have been reviewed for story quality, factual accuracy,
 pronunciation, pacing, visual repetition and thumbnail quality.
 
+## Current private pilot
+
+The first redesigned story is **"I Rejected My AI Video"**. It turns the failed V3
+output into evidence inside a short documentary about what worked technically and what
+failed creatively. It uses:
+
+- the real rejected V3 clip;
+- real VM and render measurements;
+- custom documentary motion graphics and captions;
+- Gemini's controllable TTS voice instead of the robotic Piper voice;
+- a visible human editorial decision; and
+- no stock footage or borrowed creator format.
+
+Render it on the server after pulling the latest code:
+
+```bash
+cd /opt/autotube-repo/youtube-engine
+.venv/bin/python scripts/test_documentary.py
+```
+
+The script automatically finds the newest `data/v3-bridge-test-*/final.mp4`. It creates
+a new `data/documentary-pilot-*/final.mp4` and `thumbnail.jpg`, but never calls the
+YouTube uploader. Review both files manually before any next step.
+
 ## Cost policy
 
 - self-hosted Python worker
 - Gemini API free tier
-- Piper local TTS
-- Pillow + FFmpeg procedural animation
-- SQLite
-- YouTube Data API quota
-- systemd timer on the existing Oracle VM
+- Gemini controllable TTS for the reviewed pilot
+- Pillow + FFmpeg documentary motion graphics
 
-No paid voice, stock-footage, video-generation or automation SaaS is required for V3.
+No paid voice, stock footage, video-generation or automation SaaS is required for this
+pilot. Gemini's preview TTS availability and free-tier limits can change, so keep the
+model configurable in `.env`.
 
 ## Current deployment path
 
@@ -70,23 +84,30 @@ YOUTUBE_PRIVACY_STATUS=private
 .venv/bin/python scripts/test_gemini.py
 ```
 
-### 3. Render the V3 character prototype
+### 3. Render the redesigned private pilot
+
+```bash
+time .venv/bin/python scripts/test_documentary.py
+```
+
+Review both the returned `final.mp4` and `thumbnail.jpg`. Do not upload them yet.
+
+### Legacy V3 diagnostic only
 
 ```bash
 time .venv/bin/python scripts/test_v3.py
 ```
 
-This produces a roughly one-minute bridge-collapse challenge featuring Nova, Mira,
-Bolt and Pix. Review both the returned `final.mp4` and `thumbnail.jpg` before running
-a full Gemini-generated episode.
+The recurring robot renderer remains in the repository as the record of the failed
+prototype and as source footage for this pilot. It is not the production format.
 
-### 4. Run one full episode without upload
+### Production automation remains paused
 
-```bash
-time .venv/bin/python scripts/run_once.py
-```
+Do not run `scripts/run_once.py`, enable uploads, or install the timer while the channel
+format is still being validated. Those actions come only after multiple private pilots
+pass a human creative review.
 
-### 5. Install the production timer only after approval
+The legacy timer commands are retained here for future reference only:
 
 ```bash
 sudo cp systemd/autotube.service /etc/systemd/system/
