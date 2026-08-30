@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 
 from worker.pipeline import Pipeline
 
-app = FastAPI(title="AutoTube Worker", version="0.1.0")
+app = FastAPI(title="AutoTube Worker", version="0.3.0")
 pipeline = Pipeline()
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
@@ -29,13 +29,32 @@ def _execute(job_id: str) -> None:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True}
+    return {
+        "ok": True,
+        "version": app.version,
+        "format": "recurring-character-simulations",
+        "upload_enabled": pipeline.settings.upload_enabled,
+        "privacy_status": pipeline.settings.privacy_status,
+    }
 
 
 @app.post("/run", status_code=202)
 def run_pipeline() -> dict:
     job_id = str(uuid.uuid4())
     with _lock:
+        active_job = next(
+            (
+                existing_id
+                for existing_id, job in _jobs.items()
+                if job.get("status") in {"queued", "running"}
+            ),
+            None,
+        )
+        if active_job:
+            raise HTTPException(
+                status_code=409,
+                detail=f"AutoTube is already running job {active_job}",
+            )
         _jobs[job_id] = {
             "status": "queued",
             "created_at": datetime.now(timezone.utc).isoformat(),

@@ -57,7 +57,10 @@ class Settings:
                 ).split(",")
                 if x.strip()
             ],
-            niche=os.getenv("CHANNEL_NICHE", "Animated science and future technology what-if simulations"),
+            niche=os.getenv(
+                "CHANNEL_NICHE",
+                "Original robot challenges, science simulations and future-tech entertainment",
+            ),
             language=os.getenv("VIDEO_LANGUAGE", "en"),
             data_dir=Path(os.getenv("DATA_DIR", "data")),
             upload_enabled=_env_bool("UPLOAD_ENABLED", False),
@@ -188,8 +191,9 @@ class Pipeline:
         signals = self._feed_items(limit=30)
         prompt = f"""
 You run a YouTube channel in this niche: {self.settings.niche}.
-Choose ONE video topic with strong curiosity/click potential while still allowing accurate, educational treatment.
-The channel must avoid mass-produced/repetitive content and cannot copy titles or storylines.
+Choose ONE original, character-driven simulation challenge with strong curiosity and click potential.
+The recurring cast is Nova, Mira, Bolt and Pix: four original cartoon robots owned by this channel.
+The channel must avoid mass-produced/repetitive content and cannot copy titles, characters or storylines.
 
 Recent topics already used (avoid close repeats):
 {json.dumps(recent, ensure_ascii=False)}
@@ -197,8 +201,11 @@ Recent topics already used (avoid close repeats):
 Fresh public signals (use only as inspiration, not as a script):
 {json.dumps(signals, ensure_ascii=False)[:14000]}
 
-Generate 12 candidates, score each from 0-100 on clickability, novelty, evergreen value, visual potential, and advertiser friendliness.
-Prefer animated "What if...?", future technology, space, AI, engineering, or science scenarios.
+Generate 12 candidates. Score each from 0-100 on hook strength, clear stakes, visual action,
+novelty, repeat-character potential, evergreen value and advertiser friendliness.
+Prefer challenges such as bridge escapes, maze races, gravity failures, Mars survival,
+AI-city failures, engineering tests or science-based "What if...?" scenarios.
+The chosen idea must have a visual setup, escalating problem, reversal and satisfying result.
 Return JSON exactly as:
 {{"selected": {{"topic":"...","angle":"...","score":0}}, "candidates":[...]}}
 """
@@ -212,9 +219,15 @@ Return JSON exactly as:
 
     def create_episode(self, topic: dict[str, Any], sources: list[dict[str, str]]) -> dict[str, Any]:
         prompt = f"""
-Create an original YouTube episode for the niche: {self.settings.niche}.
+Create an original YouTube entertainment episode for the niche: {self.settings.niche}.
 Topic: {topic['topic']}
 Angle: {topic.get('angle','')}
+
+Recurring original cast (use the same personalities in every episode):
+- Nova: calm blue team leader and planner
+- Mira: clever purple analyst
+- Bolt: fast orange risk-taker
+- Pix: small green problem-solver and emotional underdog
 
 Research snippets and links:
 {json.dumps(sources, ensure_ascii=False)[:22000]}
@@ -223,39 +236,106 @@ Rules:
 - Educational entertainment, not financial/medical/legal advice.
 - Do not invent factual claims. If the topic is hypothetical, clearly distinguish assumptions from established facts.
 - Never copy source wording.
-- Aim for 6-8 minutes in V1.
+- Aim for 6-8 minutes and roughly 850-1100 spoken words.
 - Hook immediately; no generic welcome intro.
-- Make every scene materially different.
+- Build a clear setup, escalating challenge, setback, reversal, climax and payoff.
+- Use 12-18 concise scenes so the visual changes frequently.
 - Give each scene a concise visual heading plus 2-4 short on-screen points.
 - Narration should sound natural when spoken.
+- Each scene visual_type must be one of: simulation, planet, network, city, chart,
+  timeline, comparison, energy, generic.
+- Use simulation for at least half of the scenes. simulation_type must be one of:
+  bridge, gravity, maze, mars. Prefer one primary simulation type for the episode.
+- Every simulation scene needs 3-5 shots. Each shot has a short action and a
+  punchy on-screen caption. Never request celebrity likenesses or copyrighted characters.
+- For consecutive scenes in the same simulation, set simulation_start and simulation_end
+  to successive non-overlapping ranges from 0.0 to 1.0 so the action advances instead of restarting.
 - Include source URLs used so they can be listed in the description.
 
 Return JSON exactly in this shape:
 {{
   "working_title":"...",
   "hook":"...",
+  "challenge":{{"setup":"...","stakes":"...","result":"..."}},
+  "characters":["Nova","Mira","Bolt","Pix"],
   "scenes":[
-    {{"heading":"...","narration":"...","points":["...","..."]}}
+    {{
+      "heading":"...",
+      "narration":"...",
+      "points":["...","..."],
+      "visual_type":"simulation",
+      "simulation_type":"bridge",
+      "simulation_start":0.0,
+      "simulation_end":0.15,
+      "shots":[
+        {{"action":"...","caption":"..."}},
+        {{"action":"...","caption":"..."}},
+        {{"action":"...","caption":"..."}}
+      ]
+    }}
   ],
   "source_urls":["https://..."],
   "description_summary":"2-3 original sentences"
 }}
 """
         episode = self._gemini_json(prompt)
-        if len(episode.get("scenes", [])) < 5:
-            raise RuntimeError("Episode failed quality gate: fewer than 5 scenes.")
+        scenes = episode.get("scenes", [])
+        if len(scenes) < 8:
+            raise RuntimeError("Episode failed quality gate: fewer than 8 scenes.")
+
+        allowed_visuals = {
+            "simulation",
+            "planet",
+            "network",
+            "city",
+            "chart",
+            "timeline",
+            "comparison",
+            "energy",
+            "generic",
+        }
+        allowed_simulations = {"bridge", "gravity", "maze", "mars"}
+        for index, scene in enumerate(scenes, start=1):
+            if not isinstance(scene, dict):
+                raise RuntimeError(f"Episode failed quality gate: scene {index} is not an object.")
+            visual_type = str(scene.get("visual_type", "generic")).strip().lower()
+            scene["visual_type"] = visual_type if visual_type in allowed_visuals else "generic"
+
+        simulation_scenes = [scene for scene in scenes if scene.get("visual_type") == "simulation"]
+        if len(simulation_scenes) < max(3, len(scenes) // 3):
+            raise RuntimeError("Episode failed quality gate: not enough simulation scenes.")
+
+        simulation_count = len(simulation_scenes)
+        simulation_index = 0
+        for index, scene in enumerate(scenes, start=1):
+            if not str(scene.get("narration", "")).strip():
+                raise RuntimeError(f"Episode failed quality gate: scene {index} has no narration.")
+            if scene["visual_type"] != "simulation":
+                continue
+
+            simulation_type = str(scene.get("simulation_type", "bridge")).strip().lower()
+            scene["simulation_type"] = simulation_type if simulation_type in allowed_simulations else "bridge"
+            if not scene.get("shots"):
+                scene["shots"] = [
+                    {"action": point, "caption": point.upper()}
+                    for point in (scene.get("points") or [scene.get("heading", "Challenge")])[:3]
+                ]
+            if "simulation_start" not in scene or "simulation_end" not in scene:
+                scene["simulation_start"] = simulation_index / simulation_count
+                scene["simulation_end"] = (simulation_index + 1) / simulation_count
+            simulation_index += 1
         return episode
 
     def create_metadata(self, episode: dict[str, Any]) -> dict[str, Any]:
         prompt = f"""
-Create YouTube metadata for this original animated science/future-tech episode.
+Create YouTube metadata for this original recurring-character robot/simulation episode.
 Episode title idea: {episode['working_title']}
 Summary: {episode['description_summary']}
 Sources: {json.dumps(episode.get('source_urls', []))}
 
 Return JSON exactly:
 {{
- "title":"<=70 characters, specific and curiosity-driven, not deceptive",
+ "title":"<=70 characters, specific, challenge-driven and not deceptive",
  "description":"Concise description followed by a Sources section with the supplied URLs",
  "tags":["8-15 relevant tags"],
  "thumbnail_text":"2-4 words max"
@@ -280,37 +360,41 @@ Return JSON exactly:
     def run(self, job_id: str) -> dict[str, Any]:
         topic = self.choose_topic()
         self._insert_record(job_id, topic["topic"])
-        sources = self.research(topic["topic"])
-        episode = self.create_episode(topic, sources)
-        metadata = self.create_metadata(episode)
+        try:
+            sources = self.research(topic["topic"])
+            episode = self.create_episode(topic, sources)
+            metadata = self.create_metadata(episode)
 
-        render = self.renderer.render_episode(job_id, episode, metadata)
-        self.renderer.quality_check(render["video_path"])
+            render = self.renderer.render_episode(job_id, episode, metadata)
+            self.renderer.quality_check(render["video_path"])
 
-        video_id: str | None = None
-        status = "rendered"
-        if self.settings.upload_enabled:
-            uploader = YouTubeUploader(
-                privacy_status=self.settings.privacy_status,
-                category_id=self.settings.category_id,
-            )
-            video_id = uploader.upload(
-                video_path=render["video_path"],
-                thumbnail_path=render["thumbnail_path"],
-                title=metadata["title"],
-                description=metadata["description"],
-                tags=metadata.get("tags", []),
-            )
-            status = "uploaded"
+            video_id: str | None = None
+            status = "rendered"
+            if self.settings.upload_enabled:
+                uploader = YouTubeUploader(
+                    privacy_status=self.settings.privacy_status,
+                    category_id=self.settings.category_id,
+                )
+                video_id = uploader.upload(
+                    video_path=render["video_path"],
+                    thumbnail_path=render["thumbnail_path"],
+                    title=metadata["title"],
+                    description=metadata["description"],
+                    tags=metadata.get("tags", []),
+                )
+                status = "uploaded"
 
-        self._finish_record(job_id, metadata["title"], status, video_id)
-        return {
-            "topic": topic,
-            "title": metadata["title"],
-            "status": status,
-            "upload_enabled": self.settings.upload_enabled,
-            "youtube_video_id": video_id,
-            "privacy_status": self.settings.privacy_status if self.settings.upload_enabled else None,
-            "video_path": str(render["video_path"]),
-            "thumbnail_path": str(render["thumbnail_path"]),
-        }
+            self._finish_record(job_id, metadata["title"], status, video_id)
+            return {
+                "topic": topic,
+                "title": metadata["title"],
+                "status": status,
+                "upload_enabled": self.settings.upload_enabled,
+                "youtube_video_id": video_id,
+                "privacy_status": self.settings.privacy_status if self.settings.upload_enabled else None,
+                "video_path": str(render["video_path"]),
+                "thumbnail_path": str(render["thumbnail_path"]),
+            }
+        except Exception:
+            self._finish_record(job_id, topic["topic"], "failed")
+            raise

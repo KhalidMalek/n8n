@@ -12,6 +12,8 @@ from typing import Any
 from piper import PiperVoice
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+from worker.simulation import SimulationRenderer
+
 
 class VideoRenderer:
     WIDTH = 1920
@@ -31,6 +33,7 @@ class VideoRenderer:
                 "Run: python -m piper.download_voices --data-dir voices en_US-ljspeech-medium"
             )
         self.tts = PiperVoice.load(str(model_path))
+        self.simulation = SimulationRenderer(self.font_regular, self.font_bold)
 
     @staticmethod
     def _safe_name(value: str) -> str:
@@ -72,7 +75,17 @@ class VideoRenderer:
     @staticmethod
     def _scene_type(scene: dict[str, Any]) -> str:
         explicit = str(scene.get("visual_type", "")).strip().lower()
-        allowed = {"planet", "network", "city", "chart", "timeline", "comparison", "energy", "generic"}
+        allowed = {
+            "simulation",
+            "planet",
+            "network",
+            "city",
+            "chart",
+            "timeline",
+            "comparison",
+            "energy",
+            "generic",
+        }
         if explicit in allowed:
             return explicit
         text = f"{scene.get('heading','')} {' '.join(scene.get('points', []))}".lower()
@@ -288,7 +301,10 @@ class VideoRenderer:
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    def _thumbnail(self, title: str, text: str, path: Path) -> None:
+    def _thumbnail(self, title: str, text: str, path: Path, scene: dict[str, Any] | None = None) -> None:
+        if scene and self._scene_type(scene) == "simulation":
+            self.simulation.thumbnail(scene, text, path)
+            return
         scene = {"heading": title, "points": [], "visual_type": self._scene_type({"heading": title, "points": []})}
         img = self._gradient_background(777)
         scene_type = scene["visual_type"]
@@ -335,8 +351,11 @@ class VideoRenderer:
             segment = run_dir / f"scene_{idx:02d}.mp4"
             duration = self._tts_to_file(scene["narration"], audio)
             print(f"  [render] Scene {idx}/{len(scenes)} • {duration:.1f}s: building visual + encoding...", flush=True)
-            self._scene_image(scene, idx, len(scenes), image)
-            self._make_segment(image, audio, duration, segment)
+            if scene_type == "simulation":
+                self.simulation.render(scene, audio, duration, segment)
+            else:
+                self._scene_image(scene, idx, len(scenes), image)
+                self._make_segment(image, audio, duration, segment)
             segments.append(segment)
 
         print("  [render] Joining scenes...", flush=True)
@@ -353,10 +372,16 @@ class VideoRenderer:
 
         print("  [render] Creating thumbnail...", flush=True)
         thumbnail = run_dir / "thumbnail.jpg"
-        self._thumbnail(metadata["title"], metadata.get("thumbnail_text", "WHAT IF?"), thumbnail)
+        simulation_scene = next((scene for scene in scenes if self._scene_type(scene) == "simulation"), None)
+        self._thumbnail(
+            metadata["title"],
+            metadata.get("thumbnail_text", "WHAT IF?"),
+            thumbnail,
+            simulation_scene,
+        )
         return {"video_path": final_video, "thumbnail_path": thumbnail}
 
-    def quality_check(self, video_path: Path) -> None:
+    def quality_check(self, video_path: Path, min_duration: float = 180.0) -> None:
         if not video_path.exists() or video_path.stat().st_size < 1_000_000:
             raise RuntimeError("Quality gate failed: rendered video is missing or unexpectedly small")
         result = subprocess.run(
@@ -366,5 +391,8 @@ class VideoRenderer:
             text=True,
         )
         duration = float(result.stdout.strip())
-        if duration < 180:
-            raise RuntimeError(f"Quality gate failed: video is only {duration:.0f}s; minimum V1 duration is 180s")
+        if duration < min_duration:
+            raise RuntimeError(
+                f"Quality gate failed: video is only {duration:.0f}s; "
+                f"minimum duration is {min_duration:.0f}s"
+            )
