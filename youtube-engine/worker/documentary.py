@@ -111,15 +111,25 @@ class GeminiNarrator:
 
     @staticmethod
     def _write_audio(path: Path, audio: bytes, mime_type: str, sample_rate: int) -> None:
-        if audio.startswith(b"RIFF") or mime_type in {"audio/wav", "audio/x-wav"}:
+        mime_parts = [part.strip() for part in mime_type.lower().split(";") if part.strip()]
+        media_type = mime_parts[0] if mime_parts else ""
+        parameters: dict[str, str] = {}
+        for part in mime_parts[1:]:
+            key, separator, value = part.partition("=")
+            if separator:
+                parameters[key.strip()] = value.strip()
+
+        if audio.startswith(b"RIFF") or media_type in {"audio/wav", "audio/x-wav"}:
             path.write_bytes(audio)
             return
-        if mime_type.lower() not in {"audio/l16", ""}:
+        if media_type not in {"audio/l16", ""}:
             raise RuntimeError(f"Gemini returned unsupported audio type: {mime_type}")
+        output_rate = int(parameters.get("rate", sample_rate or 24000))
+        output_channels = int(parameters.get("channels", 1))
         with wave.open(str(path), "wb") as output:
-            output.setnchannels(1)
+            output.setnchannels(output_channels)
             output.setsampwidth(2)
-            output.setframerate(sample_rate or 24000)
+            output.setframerate(output_rate)
             output.writeframes(audio)
 
     def synthesize(self, transcript: str, output_path: Path) -> None:
